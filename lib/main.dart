@@ -6,70 +6,77 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  runApp(const SharedPlannerApp());
+  runApp(const SharredPlannerApp());
 }
 
-// ============================================================
-// APP
-// ============================================================
-
-class SharedPlannerApp extends StatelessWidget {
-  const SharedPlannerApp({super.key});
+class SharredPlannerApp extends StatelessWidget {
+  const SharredPlannerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Sharred Planner',
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.indigo,
+        brightness: Brightness.light,
       ),
-
       home: const HomeScreen(),
     );
   }
 }
 
-// ============================================================
-// ENUMS
-// ============================================================
-
-enum ItemType {
-  event,
-  task,
-}
-
-enum ViewFilter {
-  everyone,
-  onlyMe,
-}
-
-// ============================================================
-// EVENT MODEL
-// ============================================================
+// -----------------------------------------------------------------------------
+// MODELS
+// -----------------------------------------------------------------------------
 
 class PlannerEvent {
   final String id;
   final String title;
   final String description;
   final DateTime date;
+  final int startMinutes;
+  final int endMinutes;
   final String ownerId;
   final String ownerName;
   final int colorValue;
 
-  PlannerEvent({
+  const PlannerEvent({
     required this.id,
     required this.title,
     required this.description,
     required this.date,
+    required this.startMinutes,
+    required this.endMinutes,
     required this.ownerId,
     required this.ownerName,
     required this.colorValue,
   });
+
+  PlannerEvent copyWith({
+    String? id,
+    String? title,
+    String? description,
+    DateTime? date,
+    int? startMinutes,
+    int? endMinutes,
+    String? ownerId,
+    String? ownerName,
+    int? colorValue,
+  }) {
+    return PlannerEvent(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      date: date ?? this.date,
+      startMinutes: startMinutes ?? this.startMinutes,
+      endMinutes: endMinutes ?? this.endMinutes,
+      ownerId: ownerId ?? this.ownerId,
+      ownerName: ownerName ?? this.ownerName,
+      colorValue: colorValue ?? this.colorValue,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -77,33 +84,29 @@ class PlannerEvent {
       'title': title,
       'description': description,
       'date': date.toIso8601String(),
+      'startMinutes': startMinutes,
+      'endMinutes': endMinutes,
       'ownerId': ownerId,
       'ownerName': ownerName,
       'colorValue': colorValue,
     };
   }
 
-  factory PlannerEvent.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory PlannerEvent.fromJson(Map<String, dynamic> json) {
     return PlannerEvent(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      description: json['description'] ?? '',
-      date: DateTime.parse(
-        json['date'],
-      ),
-      ownerId: json['ownerId'] ?? 'me',
-      ownerName: json['ownerName'] ?? 'Me',
-      colorValue:
-          json['colorValue'] ?? Colors.indigo.value,
+      id: json['id'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String? ?? '',
+      date: DateTime.parse(json['date'] as String),
+      // Old events that don't have times will default to 09:00–10:00.
+      startMinutes: json['startMinutes'] as int? ?? 9 * 60,
+      endMinutes: json['endMinutes'] as int? ?? 10 * 60,
+      ownerId: json['ownerId'] as String? ?? 'me',
+      ownerName: json['ownerName'] as String? ?? 'Me',
+      colorValue: json['colorValue'] as int? ?? 0xFF3F51B5,
     );
   }
 }
-
-// ============================================================
-// TASK MODEL
-// ============================================================
 
 class PlannerTask {
   final String id;
@@ -115,7 +118,7 @@ class PlannerTask {
   final bool completed;
   final int colorValue;
 
-  PlannerTask({
+  const PlannerTask({
     required this.id,
     required this.title,
     required this.description,
@@ -127,18 +130,24 @@ class PlannerTask {
   });
 
   PlannerTask copyWith({
+    String? id,
+    String? title,
+    String? description,
+    DateTime? dueDate,
+    String? ownerId,
+    String? ownerName,
     bool? completed,
+    int? colorValue,
   }) {
     return PlannerTask(
-      id: id,
-      title: title,
-      description: description,
-      dueDate: dueDate,
-      ownerId: ownerId,
-      ownerName: ownerName,
-      completed:
-          completed ?? this.completed,
-      colorValue: colorValue,
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      dueDate: dueDate ?? this.dueDate,
+      ownerId: ownerId ?? this.ownerId,
+      ownerName: ownerName ?? this.ownerName,
+      completed: completed ?? this.completed,
+      colorValue: colorValue ?? this.colorValue,
     );
   }
 
@@ -147,8 +156,7 @@ class PlannerTask {
       'id': id,
       'title': title,
       'description': description,
-      'dueDate':
-          dueDate.toIso8601String(),
+      'dueDate': dueDate.toIso8601String(),
       'ownerId': ownerId,
       'ownerName': ownerName,
       'completed': completed,
@@ -156,1035 +164,1042 @@ class PlannerTask {
     };
   }
 
-  factory PlannerTask.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory PlannerTask.fromJson(Map<String, dynamic> json) {
     return PlannerTask(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      description: json['description'] ?? '',
-      dueDate: DateTime.parse(
-        json['dueDate'],
-      ),
-      ownerId: json['ownerId'] ?? 'me',
-      ownerName:
-          json['ownerName'] ?? 'Me',
-      completed:
-          json['completed'] ?? false,
-      colorValue:
-          json['colorValue'] ??
-              Colors.orange.value,
+      id: json['id'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String? ?? '',
+      dueDate: DateTime.parse(json['dueDate'] as String),
+      ownerId: json['ownerId'] as String? ?? 'me',
+      ownerName: json['ownerName'] as String? ?? 'Me',
+      completed: json['completed'] as bool? ?? false,
+      colorValue: json['colorValue'] as int? ?? 0xFF00897B,
     );
   }
 }
 
-// ============================================================
-// LOCAL STORAGE
-// ============================================================
+// -----------------------------------------------------------------------------
+// STORAGE
+// -----------------------------------------------------------------------------
 
 class StorageService {
-  static const String eventsKey =
-      'planner_events';
+  static const String eventsKey = 'planner_events';
+  static const String tasksKey = 'planner_tasks';
 
-  static const String tasksKey =
-      'planner_tasks';
+  Future<List<PlannerEvent>> loadEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString(eventsKey);
 
-  Future<List<PlannerEvent>>
-      loadEvents() async {
-    final prefs =
-        await SharedPreferences
-            .getInstance();
-
-    final data =
-        prefs.getString(eventsKey);
-
-    if (data == null) {
+    if (data == null || data.isEmpty) {
       return [];
     }
 
-    final decoded =
-        jsonDecode(data) as List;
-
-    return decoded
-        .map(
-          (item) =>
-              PlannerEvent.fromJson(
-            Map<String, dynamic>.from(
-              item,
+    try {
+      final List<dynamic> decoded = jsonDecode(data);
+      return decoded
+          .map(
+            (item) => PlannerEvent.fromJson(
+              Map<String, dynamic>.from(item as Map),
             ),
-          ),
-        )
-        .toList();
+          )
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
-  Future<List<PlannerTask>>
-      loadTasks() async {
-    final prefs =
-        await SharedPreferences
-            .getInstance();
+  Future<List<PlannerTask>> loadTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString(tasksKey);
 
-    final data =
-        prefs.getString(tasksKey);
-
-    if (data == null) {
+    if (data == null || data.isEmpty) {
       return [];
     }
 
-    final decoded =
-        jsonDecode(data) as List;
-
-    return decoded
-        .map(
-          (item) =>
-              PlannerTask.fromJson(
-            Map<String, dynamic>.from(
-              item,
+    try {
+      final List<dynamic> decoded = jsonDecode(data);
+      return decoded
+          .map(
+            (item) => PlannerTask.fromJson(
+              Map<String, dynamic>.from(item as Map),
             ),
-          ),
-        )
-        .toList();
+          )
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
-  Future<void> saveEvents(
-    List<PlannerEvent> events,
-  ) async {
-    final prefs =
-        await SharedPreferences
-            .getInstance();
+  Future<void> saveEvents(List<PlannerEvent> events) async {
+    final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(
-      eventsKey,
-      jsonEncode(
-        events
-            .map(
-              (event) =>
-                  event.toJson(),
-            )
-            .toList(),
-      ),
+    final data = jsonEncode(
+      events.map((event) => event.toJson()).toList(),
     );
+
+    await prefs.setString(eventsKey, data);
   }
 
-  Future<void> saveTasks(
-    List<PlannerTask> tasks,
-  ) async {
-    final prefs =
-        await SharedPreferences
-            .getInstance();
+  Future<void> saveTasks(List<PlannerTask> tasks) async {
+    final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(
-      tasksKey,
-      jsonEncode(
-        tasks
-            .map(
-              (task) =>
-                  task.toJson(),
-            )
-            .toList(),
-      ),
+    final data = jsonEncode(
+      tasks.map((task) => task.toJson()).toList(),
     );
+
+    await prefs.setString(tasksKey, data);
   }
 }
 
-// ============================================================
+// -----------------------------------------------------------------------------
 // HOME SCREEN
-// ============================================================
+// -----------------------------------------------------------------------------
 
-class HomeScreen
-    extends StatefulWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen>
-      createState() =>
-          _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState
-    extends State<HomeScreen> {
-  final StorageService storage =
-      StorageService();
+class _HomeScreenState extends State<HomeScreen> {
+  final StorageService storage = StorageService();
 
   List<PlannerEvent> events = [];
-
   List<PlannerTask> tasks = [];
 
-  DateTime selectedDate =
-      DateTime.now();
+  DateTime selectedDate = DateTime.now();
 
-  ViewFilter filter =
-      ViewFilter.everyone;
+  // true = everyone, false = only me
+  bool showEveryone = true;
+
+  bool loading = true;
 
   @override
   void initState() {
     super.initState();
-
     loadData();
   }
 
   Future<void> loadData() async {
-    final loadedEvents =
-        await storage.loadEvents();
-
-    final loadedTasks =
-        await storage.loadTasks();
+    final loadedEvents = await storage.loadEvents();
+    final loadedTasks = await storage.loadTasks();
 
     if (!mounted) return;
 
     setState(() {
       events = loadedEvents;
       tasks = loadedTasks;
+      loading = false;
     });
   }
 
-  bool isSameDay(
-    DateTime first,
-    DateTime second,
-  ) {
-    return first.year ==
-            second.year &&
-        first.month ==
-            second.month &&
-        first.day ==
-            second.day;
+  bool sameDay(DateTime a, DateTime b) {
+    return a.year == b.year &&
+        a.month == b.month &&
+        a.day == b.day;
   }
 
-  List<PlannerEvent>
-      get visibleEvents {
-    return events.where((event) {
-      if (!isSameDay(
-        event.date,
-        selectedDate,
-      )) {
+  String formatTime(int minutes) {
+    final hour = minutes ~/ 60;
+    final minute = minutes % 60;
+
+    final time = TimeOfDay(
+      hour: hour,
+      minute: minute,
+    );
+
+    return time.format(context);
+  }
+
+  List<PlannerEvent> get visibleEvents {
+    final result = events.where((event) {
+      if (!sameDay(event.date, selectedDate)) {
         return false;
       }
 
-      if (filter ==
-              ViewFilter.onlyMe &&
-          event.ownerId != 'me') {
+      if (!showEveryone && event.ownerId != 'me') {
         return false;
       }
 
       return true;
     }).toList();
+
+    result.sort(
+      (a, b) => a.startMinutes.compareTo(b.startMinutes),
+    );
+
+    return result;
   }
 
-  List<PlannerTask>
-      get visibleTasks {
-    return tasks.where((task) {
-      if (!isSameDay(
-        task.dueDate,
-        selectedDate,
-      )) {
+  List<PlannerTask> get visibleTasks {
+    final result = tasks.where((task) {
+      if (!sameDay(task.dueDate, selectedDate)) {
         return false;
       }
 
-      if (filter ==
-              ViewFilter.onlyMe &&
-          task.ownerId != 'me') {
+      if (!showEveryone && task.ownerId != 'me') {
         return false;
       }
 
       return true;
     }).toList();
+
+    return result;
   }
 
-  Future<void>
-      openAddItem() async {
-    final result =
-        await Navigator.push(
+  Future<void> openAddItem() async {
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            AddItemScreen(
-          selectedDate:
-              selectedDate,
+        builder: (_) => AddItemScreen(
+          initialDate: selectedDate,
         ),
       ),
     );
 
-    if (result
-        is PlannerEvent) {
-      events.add(result);
+    if (result is PlannerEvent) {
+      setState(() {
+        events.add(result);
+      });
 
-      await storage.saveEvents(
-        events,
-      );
-
-      setState(() {});
+      await storage.saveEvents(events);
     }
 
-    if (result
-        is PlannerTask) {
-      tasks.add(result);
+    if (result is PlannerTask) {
+      setState(() {
+        tasks.add(result);
+      });
 
-      await storage.saveTasks(
-        tasks,
-      );
-
-      setState(() {});
+      await storage.saveTasks(tasks);
     }
   }
 
-  Future<void>
-      toggleTask(
-    PlannerTask task,
-  ) async {
-    final index =
-        tasks.indexWhere(
-      (item) =>
-          item.id == task.id,
+  Future<void> editEvent(PlannerEvent event) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddItemScreen(
+          initialDate: event.date,
+          existingEvent: event,
+        ),
+      ),
+    );
+
+    if (result is PlannerEvent) {
+      final index = events.indexWhere(
+        (item) => item.id == event.id,
+      );
+
+      if (index != -1) {
+        setState(() {
+          events[index] = result;
+        });
+
+        await storage.saveEvents(events);
+      }
+    }
+  }
+
+  Future<void> deleteEvent(PlannerEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete event?'),
+          content: Text(
+            'Are you sure you want to delete "${event.title}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      events.removeWhere(
+        (item) => item.id == event.id,
+      );
+    });
+
+    await storage.saveEvents(events);
+  }
+
+  Future<void> toggleTask(PlannerTask task) async {
+    final index = tasks.indexWhere(
+      (item) => item.id == task.id,
     );
 
     if (index == -1) return;
 
-    tasks[index] =
-        task.copyWith(
-      completed:
-          !task.completed,
-    );
+    setState(() {
+      tasks[index] = task.copyWith(
+        completed: !task.completed,
+      );
+    });
 
-    await storage.saveTasks(
-      tasks,
-    );
-
-    setState(() {});
+    await storage.saveTasks(tasks);
   }
 
   void previousDay() {
     setState(() {
-      selectedDate =
-          selectedDate.subtract(
-        const Duration(
-          days: 1,
-        ),
+      selectedDate = selectedDate.subtract(
+        const Duration(days: 1),
       );
     });
   }
 
   void nextDay() {
     setState(() {
-      selectedDate =
-          selectedDate.add(
-        const Duration(
-          days: 1,
-        ),
+      selectedDate = selectedDate.add(
+        const Duration(days: 1),
       );
     });
   }
 
   void today() {
     setState(() {
-      selectedDate =
-          DateTime.now();
+      selectedDate = DateTime.now();
     });
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final dateText =
-        DateFormat(
+  Widget build(BuildContext context) {
+    final dateText = DateFormat(
       'EEEE, d MMMM yyyy',
-    ).format(
-      selectedDate,
-    );
+    ).format(selectedDate);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Sharred Planner',
-          style: TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-
+        title: const Text('Sharred Planner'),
         actions: [
-          PopupMenuButton<
-              ViewFilter>(
-            icon: const Icon(
-              Icons.visibility,
-            ),
-
-            onSelected:
-                (value) {
-              setState(() {
-                filter = value;
-              });
-            },
-
-            itemBuilder:
-                (context) =>
-                    const [
-              PopupMenuItem(
-                value:
-                    ViewFilter
-                        .everyone,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.groups,
-                    ),
-                    SizedBox(
-                      width: 10,
-                    ),
-                    Text(
-                      'Everyone',
-                    ),
-                  ],
-                ),
-              ),
-
-              PopupMenuItem(
-                value:
-                    ViewFilter
-                        .onlyMe,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.person,
-                    ),
-                    SizedBox(
-                      width: 10,
-                    ),
-                    Text(
-                      'Only Me',
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
           IconButton(
-            icon: const Icon(
-              Icons.settings,
-            ),
+            tooltip: 'Settings',
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      const SettingsScreen(),
+                  builder: (_) => const SettingsScreen(),
                 ),
               );
             },
+            icon: const Icon(Icons.settings_outlined),
           ),
         ],
       ),
-
-      floatingActionButton:
-          FloatingActionButton.extended(
-        onPressed:
-            openAddItem,
-        icon: const Icon(
-          Icons.add,
-        ),
-        label: const Text(
-          'Add',
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: openAddItem,
+        icon: const Icon(Icons.add),
+        label: const Text('Add'),
       ),
-
-      body: Column(
-        children: [
-          const SizedBox(
-            height: 12,
-          ),
-
-          Text(
-            dateText,
-            style: Theme.of(
-              context,
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(),
             )
-                .textTheme
-                .headlineSmall
-                ?.copyWith(
-                  fontWeight:
-                      FontWeight.bold,
-                ),
-          ),
-
-          const SizedBox(
-            height: 8,
-          ),
-
-          Row(
-            mainAxisAlignment:
-                MainAxisAlignment
-                    .center,
-            children: [
-              IconButton(
-                onPressed:
-                    previousDay,
-                icon: const Icon(
-                  Icons
-                      .chevron_left,
-                ),
-              ),
-
-              FilledButton
-                  .tonal(
-                onPressed: today,
-                child: const Text(
-                  'Today',
-                ),
-              ),
-
-              IconButton(
-                onPressed:
-                    nextDay,
-                icon: const Icon(
-                  Icons
-                      .chevron_right,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(
-            height: 6,
-          ),
-
-          Container(
-            padding:
-                const EdgeInsets
-                    .symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-            decoration:
-                BoxDecoration(
-              color: Theme.of(
-                context,
-              )
-                  .colorScheme
-                  .secondaryContainer,
-              borderRadius:
-                  BorderRadius
-                      .circular(
-                20,
-              ),
-            ),
-            child: Text(
-              filter ==
-                      ViewFilter
-                          .onlyMe
-                  ? 'Only my events and tasks'
-                  : 'Everyone’s events and tasks',
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight
-                        .w600,
-              ),
-            ),
-          ),
-
-          const Divider(
-            height: 24,
-          ),
-
-          Expanded(
-            child: ListView(
-              padding:
-                  const EdgeInsets
-                      .fromLTRB(
-                16,
-                0,
-                16,
-                100,
-              ),
+          : Column(
               children: [
-                sectionHeader(
-                  context,
-                  'Events',
-                  Icons.event,
-                ),
+                const SizedBox(height: 8),
 
-                const SizedBox(
-                  height: 8,
-                ),
+                // -------------------------------------------------------------
+                // DATE NAVIGATION
+                // -------------------------------------------------------------
 
-                if (visibleEvents
-                    .isEmpty)
-                  emptyCard(
-                    'No events for this day.',
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
                   ),
-
-                ...visibleEvents
-                    .map(
-                  eventCard,
-                ),
-
-                const SizedBox(
-                  height: 24,
-                ),
-
-                sectionHeader(
-                  context,
-                  'Tasks',
-                  Icons
-                      .check_circle_outline,
-                ),
-
-                const SizedBox(
-                  height: 8,
-                ),
-
-                if (visibleTasks
-                    .isEmpty)
-                  emptyCard(
-                    'No tasks for this day.',
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: previousDay,
+                        icon: const Icon(
+                          Icons.chevron_left,
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Text(
+                              dateText,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            TextButton(
+                              onPressed: today,
+                              child: const Text('Today'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: nextDay,
+                        icon: const Icon(
+                          Icons.chevron_right,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
 
-                ...visibleTasks
-                    .map(
-                  taskCard,
+                // -------------------------------------------------------------
+                // VISIBILITY FILTER
+                // -------------------------------------------------------------
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                  ),
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(
+                        value: true,
+                        icon: Icon(Icons.people_outline),
+                        label: Text('Everyone'),
+                      ),
+                      ButtonSegment<bool>(
+                        value: false,
+                        icon: Icon(Icons.person_outline),
+                        label: Text('Only Me'),
+                      ),
+                    ],
+                    selected: {showEveryone},
+                    onSelectionChanged: (selection) {
+                      setState(() {
+                        showEveryone = selection.first;
+                      });
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // -------------------------------------------------------------
+                // CONTENT
+                // -------------------------------------------------------------
+
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: loadData,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                        16,
+                        0,
+                        16,
+                        100,
+                      ),
+                      children: [
+                        Text(
+                          'Events',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        if (visibleEvents.isEmpty)
+                          const Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Center(
+                                child: Text(
+                                  'No events for this day.',
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        for (final event in visibleEvents)
+                          EventCard(
+                            event: event,
+                            timeText:
+                                '${formatTime(event.startMinutes)} – ${formatTime(event.endMinutes)}',
+                            onEdit: () => editEvent(event),
+                            onDelete: () => deleteEvent(event),
+                          ),
+
+                        const SizedBox(height: 24),
+
+                        Text(
+                          'Tasks',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        if (visibleTasks.isEmpty)
+                          const Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Center(
+                                child: Text(
+                                  'No tasks for this day.',
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        for (final task in visibleTasks)
+                          TaskCard(
+                            task: task,
+                            onToggle: () => toggleTask(task),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
+}
 
-  Widget sectionHeader(
-    BuildContext context,
-    String title,
-    IconData icon,
-  ) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          color: Theme.of(
-            context,
-          )
-              .colorScheme
-              .primary,
-        ),
+// -----------------------------------------------------------------------------
+// EVENT CARD
+// -----------------------------------------------------------------------------
 
-        const SizedBox(
-          width: 8,
-        ),
+class EventCard extends StatelessWidget {
+  final PlannerEvent event;
+  final String timeText;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-        Text(
-          title,
-          style: Theme.of(
-            context,
-          )
-              .textTheme
-              .titleLarge
-              ?.copyWith(
-                fontWeight:
-                    FontWeight.bold,
-              ),
-        ),
-      ],
-    );
-  }
+  const EventCard({
+    super.key,
+    required this.event,
+    required this.timeText,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
-  Widget emptyCard(
-    String message,
-  ) {
+  @override
+  Widget build(BuildContext context) {
+    final eventColor = Color(event.colorValue);
+
     return Card(
-      child: Padding(
-        padding:
-            const EdgeInsets.all(
-          18,
-        ),
-        child: Text(
-          message,
-          style:
-              const TextStyle(
-            color: Colors.grey,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget eventCard(
-    PlannerEvent event,
-  ) {
-    return Card(
-      child: ListTile(
-        leading:
-            CircleAvatar(
-          backgroundColor:
-              Color(
-            event.colorValue,
-          ),
-          child:
-              const Icon(
-            Icons.event,
-            color:
-                Colors.white,
-          ),
-        ),
-
-        title: Text(
-          event.title,
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.w600,
-          ),
-        ),
-
-        subtitle:
-            Column(
-          crossAxisAlignment:
-              CrossAxisAlignment
-                  .start,
+      margin: const EdgeInsets.only(bottom: 10),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
           children: [
-            if (event
-                .description
-                .isNotEmpty)
-              Text(
-                event
-                    .description,
+            Container(
+              width: 6,
+              color: eventColor,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 82,
+                      child: Text(
+                        timeText,
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          if (event.description
+                              .trim()
+                              .isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(event.description),
+                          ],
+                          const SizedBox(height: 6),
+                          Text(
+                            event.ownerName,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          onEdit();
+                        } else if (value == 'delete') {
+                          onDelete();
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Edit'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            leading: Icon(Icons.delete_outline),
+                            title: Text('Delete'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-
-            Text(
-              '👤 ${event.ownerName}',
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget taskCard(
-    PlannerTask task,
-  ) {
+// -----------------------------------------------------------------------------
+// TASK CARD
+// -----------------------------------------------------------------------------
+
+class TaskCard extends StatelessWidget {
+  final PlannerTask task;
+  final VoidCallback onToggle;
+
+  const TaskCard({
+    super.key,
+    required this.task,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
+      margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        leading:
-            Checkbox(
-          value:
-              task.completed,
-          onChanged: (_) {
-            toggleTask(
-              task,
-            );
-          },
+        leading: Checkbox(
+          value: task.completed,
+          onChanged: (_) => onToggle(),
         ),
-
         title: Text(
           task.title,
-          style:
-              TextStyle(
-            fontWeight:
-                FontWeight.w600,
-            decoration:
-                task.completed
-                    ? TextDecoration
-                        .lineThrough
-                    : null,
+          style: TextStyle(
+            decoration: task.completed
+                ? TextDecoration.lineThrough
+                : null,
           ),
         ),
-
-        subtitle: Text(
-          '👤 ${task.ownerName}',
-        ),
+        subtitle: task.description.isEmpty
+            ? Text(task.ownerName)
+            : Text(
+                '${task.description}\n${task.ownerName}',
+              ),
+        isThreeLine: task.description.isNotEmpty,
       ),
     );
   }
 }
 
-// ============================================================
-// ADD ITEM SCREEN
-// ============================================================
+// -----------------------------------------------------------------------------
+// ADD / EDIT SCREEN
+// -----------------------------------------------------------------------------
 
-class AddItemScreen
-    extends StatefulWidget {
-  final DateTime selectedDate;
+class AddItemScreen extends StatefulWidget {
+  final DateTime initialDate;
+  final PlannerEvent? existingEvent;
 
   const AddItemScreen({
     super.key,
-    required this.selectedDate,
+    required this.initialDate,
+    this.existingEvent,
   });
 
   @override
-  State<AddItemScreen>
-      createState() =>
-          _AddItemScreenState();
+  State<AddItemScreen> createState() => _AddItemScreenState();
 }
 
-class _AddItemScreenState
-    extends State<AddItemScreen> {
-  final titleController =
-      TextEditingController();
+class _AddItemScreenState extends State<AddItemScreen> {
+  final titleController = TextEditingController();
+  final descriptionController = TextEditingController();
 
-  final descriptionController =
-      TextEditingController();
+  late DateTime selectedDate;
+  late TimeOfDay startTime;
+  late TimeOfDay endTime;
 
-  ItemType itemType =
-      ItemType.event;
+  bool isEvent = true;
 
-  DateTime selectedDate =
-      DateTime.now();
+  final uuid = const Uuid();
+
+  bool get isEditing => widget.existingEvent != null;
 
   @override
   void initState() {
     super.initState();
 
-    selectedDate =
-        widget.selectedDate;
+    final event = widget.existingEvent;
+
+    if (event != null) {
+      titleController.text = event.title;
+      descriptionController.text = event.description;
+
+      selectedDate = event.date;
+
+      startTime = TimeOfDay(
+        hour: event.startMinutes ~/ 60,
+        minute: event.startMinutes % 60,
+      );
+
+      endTime = TimeOfDay(
+        hour: event.endMinutes ~/ 60,
+        minute: event.endMinutes % 60,
+      );
+    } else {
+      selectedDate = widget.initialDate;
+      startTime = const TimeOfDay(
+        hour: 9,
+        minute: 0,
+      );
+      endTime = const TimeOfDay(
+        hour: 10,
+        minute: 0,
+      );
+    }
   }
 
   @override
   void dispose() {
-    titleController
-        .dispose();
-
-    descriptionController
-        .dispose();
-
+    titleController.dispose();
+    descriptionController.dispose();
     super.dispose();
   }
 
-  Future<void>
-      chooseDate() async {
-    final result =
-        await showDatePicker(
-      context: context,
-      initialDate:
-          selectedDate,
-      firstDate:
-          DateTime(2020),
-      lastDate:
-          DateTime(2100),
-    );
-
-    if (result != null) {
-      setState(() {
-        selectedDate =
-            result;
-      });
-    }
+  int timeToMinutes(TimeOfDay time) {
+    return time.hour * 60 + time.minute;
   }
 
-  void saveItem() {
-    final title =
-        titleController
-            .text
-            .trim();
+  Future<void> pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      selectedDate = picked;
+    });
+  }
+
+  Future<void> pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: startTime,
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      startTime = picked;
+
+      if (timeToMinutes(endTime) <=
+          timeToMinutes(startTime)) {
+        endTime = TimeOfDay(
+          hour: (picked.hour + 1) % 24,
+          minute: picked.minute,
+        );
+      }
+    });
+  }
+
+  Future<void> pickEndTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: endTime,
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      endTime = picked;
+    });
+  }
+
+  void save() {
+    final title = titleController.text.trim();
+    final description =
+        descriptionController.text.trim();
 
     if (title.isEmpty) {
-      ScaffoldMessenger
-          .of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Please enter a title.',
-          ),
+          content: Text('Please enter a title.'),
         ),
       );
-
       return;
     }
 
-    const uuid = Uuid();
+    final startMinutes = timeToMinutes(startTime);
+    final endMinutes = timeToMinutes(endTime);
 
-    if (itemType ==
-        ItemType.event) {
-      final event =
-          PlannerEvent(
-        id: uuid.v4(),
-        title: title,
-        description:
-            descriptionController
-                .text
-                .trim(),
-        date: selectedDate,
-        ownerId: 'me',
-        ownerName: 'Me',
-        colorValue:
-            Colors.indigo.value,
+    if (endMinutes <= startMinutes) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'End time must be after start time.',
+          ),
+        ),
       );
-
-      Navigator.pop(
-        context,
-        event,
-      );
-    } else {
-      final task =
-          PlannerTask(
-        id: uuid.v4(),
-        title: title,
-        description:
-            descriptionController
-                .text
-                .trim(),
-        dueDate:
-            selectedDate,
-        ownerId: 'me',
-        ownerName: 'Me',
-        completed: false,
-        colorValue:
-            Colors.orange.value,
-      );
-
-      Navigator.pop(
-        context,
-        task,
-      );
+      return;
     }
+
+    if (isEvent) {
+      final oldEvent = widget.existingEvent;
+
+      final event = PlannerEvent(
+        id: oldEvent?.id ?? uuid.v4(),
+        title: title,
+        description: description,
+        date: selectedDate,
+        startMinutes: startMinutes,
+        endMinutes: endMinutes,
+        ownerId: oldEvent?.ownerId ?? 'me',
+        ownerName: oldEvent?.ownerName ?? 'Me',
+        colorValue:
+            oldEvent?.colorValue ?? 0xFF3F51B5,
+      );
+
+      Navigator.pop(context, event);
+      return;
+    }
+
+    final task = PlannerTask(
+      id: uuid.v4(),
+      title: title,
+      description: description,
+      dueDate: selectedDate,
+      ownerId: 'me',
+      ownerName: 'Me',
+      completed: false,
+      colorValue: 0xFF00897B,
+    );
+
+    Navigator.pop(context, task);
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          itemType ==
-                  ItemType.event
-              ? 'New Event'
-              : 'New Task',
+          isEditing ? 'Edit Event' : 'Add Item',
         ),
+        actions: [
+          TextButton(
+            onPressed: save,
+            child: const Text('Save'),
+          ),
+        ],
       ),
-
       body: ListView(
-        padding:
-            const EdgeInsets.all(
-          20,
-        ),
+        padding: const EdgeInsets.all(16),
         children: [
-          SegmentedButton<
-              ItemType>(
+          SegmentedButton<bool>(
             segments: const [
-              ButtonSegment(
-                value:
-                    ItemType.event,
-                label:
-                    Text('Event'),
-                icon:
-                    Icon(
-                  Icons.event,
-                ),
+              ButtonSegment<bool>(
+                value: true,
+                icon: Icon(Icons.event_outlined),
+                label: Text('Event'),
               ),
-
-              ButtonSegment(
-                value:
-                    ItemType.task,
-                label:
-                    Text('Task'),
-                icon:
-                    Icon(
-                  Icons
-                      .check_circle,
-                ),
+              ButtonSegment<bool>(
+                value: false,
+                icon: Icon(Icons.task_alt),
+                label: Text('Task'),
               ),
             ],
-
-            selected: {
-              itemType,
-            },
-
-            onSelectionChanged:
-                (selection) {
-              setState(() {
-                itemType =
-                    selection
-                        .first;
-              });
-            },
+            selected: {isEvent},
+            onSelectionChanged: isEditing
+                ? null
+                : (selection) {
+                    setState(() {
+                      isEvent = selection.first;
+                    });
+                  },
           ),
 
-          const SizedBox(
-            height: 24,
-          ),
+          const SizedBox(height: 20),
 
           TextField(
-            controller:
-                titleController,
-            decoration:
-                const InputDecoration(
-              labelText:
-                  'Title',
-              hintText:
-                  'Enter a title',
-              border:
-                  OutlineInputBorder(),
+            controller: titleController,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Title',
+              hintText: 'Work',
+              border: OutlineInputBorder(),
             ),
           ),
 
-          const SizedBox(
-            height: 16,
-          ),
+          const SizedBox(height: 14),
 
           TextField(
-            controller:
-                descriptionController,
-            maxLines: 4,
-            decoration:
-                const InputDecoration(
-              labelText:
-                  'Description',
-              hintText:
-                  'Optional details',
-              border:
-                  OutlineInputBorder(),
+            controller: descriptionController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Description',
+              hintText: 'Optional',
+              border: OutlineInputBorder(),
             ),
           ),
 
-          const SizedBox(
-            height: 16,
-          ),
+          const SizedBox(height: 20),
 
+          // DATE
           Card(
-            child:
-                ListTile(
-              leading:
-                  const Icon(
-                Icons
-                    .calendar_month,
+            child: ListTile(
+              leading: const Icon(
+                Icons.calendar_today_outlined,
               ),
-
-              title:
-                  const Text(
-                'Date',
-              ),
-
-              subtitle:
-                  Text(
+              title: const Text('Date'),
+              subtitle: Text(
                 DateFormat(
                   'EEEE, d MMMM yyyy',
-                ).format(
-                  selectedDate,
-                ),
+                ).format(selectedDate),
               ),
-
-              onTap:
-                  chooseDate,
+              trailing: const Icon(
+                Icons.chevron_right,
+              ),
+              onTap: pickDate,
             ),
           ),
 
-          const SizedBox(
-            height: 24,
-          ),
+          // EVENT TIMES
+          if (isEvent) ...[
+            const SizedBox(height: 10),
+
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(
+                      Icons.play_arrow_outlined,
+                    ),
+                    title: const Text('Start time'),
+                    subtitle: Text(
+                      startTime.format(context),
+                    ),
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                    ),
+                    onTap: pickStartTime,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.stop_outlined,
+                    ),
+                    title: const Text('End time'),
+                    subtitle: Text(
+                      endTime.format(context),
+                    ),
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                    ),
+                    onTap: pickEndTime,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest,
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.schedule),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '${startTime.format(context)} – ${endTime.format(context)}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          if (!isEvent) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Tasks currently use the selected date as their due date.',
+            ),
+          ],
+
+          const SizedBox(height: 30),
 
           FilledButton.icon(
-            onPressed:
-                saveItem,
-
-            icon:
-                const Icon(
-              Icons.check,
+            onPressed: save,
+            icon: Icon(
+              isEditing
+                  ? Icons.save_outlined
+                  : Icons.add,
             ),
-
             label: Text(
-              itemType ==
-                      ItemType.event
-                  ? 'Create Event'
-                  : 'Create Task',
+              isEditing
+                  ? 'Save Changes'
+                  : 'Create ${isEvent ? 'Event' : 'Task'}',
             ),
           ),
         ],
@@ -1193,157 +1208,66 @@ class _AddItemScreenState
   }
 }
 
-// ============================================================
+// -----------------------------------------------------------------------------
 // SETTINGS
-// ============================================================
+// -----------------------------------------------------------------------------
 
-class SettingsScreen
-    extends StatelessWidget {
-  const SettingsScreen({
-    super.key,
-  });
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text(
-          'Settings',
-        ),
+        title: const Text('Settings'),
       ),
-
       body: ListView(
         children: [
-          const ListTile(
-            leading:
-                CircleAvatar(
-              child:
-                  Icon(
-                Icons.person,
-              ),
-            ),
-
-            title:
-                Text(
-              'My Account',
-            ),
-
-            subtitle:
-                Text(
-              'Me',
-            ),
-          ),
-
-          const Divider(),
-
           ListTile(
-            leading:
-                const Icon(
-              Icons.group,
+            leading: const Icon(Icons.people_outline),
+            title: const Text('People'),
+            subtitle: const Text(
+              'Manage people in your planner',
             ),
-
-            title:
-                const Text(
-              'People',
+            onTap: () {},
+          ),
+          ListTile(
+            leading: const Icon(
+              Icons.calendar_month_outlined,
             ),
-
-            subtitle:
-                const Text(
-              'Manage people',
+            title: const Text('Shared Calendars'),
+            subtitle: const Text(
+              'Manage calendars shared with others',
             ),
-
+            onTap: () {},
+          ),
+          ListTile(
+            leading: const Icon(
+              Icons.notifications_outlined,
+            ),
+            title: const Text('Notifications'),
+            subtitle: const Text(
+              'Manage reminders and notifications',
+            ),
+            onTap: () {},
+          ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('About'),
+            subtitle: const Text(
+              'Sharred Planner',
+            ),
             onTap: () {
-              showInfo(
-                context,
-                'Online accounts and invitations '
-                'will be connected in the next stage.',
+              showAboutDialog(
+                context: context,
+                applicationName: 'Sharred Planner',
+                applicationVersion: '1.0.0',
+                applicationLegalese:
+                    'Shared calendar and task planner',
               );
             },
-          ),
-
-          ListTile(
-            leading:
-                const Icon(
-              Icons.calendar_month,
-            ),
-
-            title:
-                const Text(
-              'Shared Calendars',
-            ),
-
-            subtitle:
-                const Text(
-              'Create and manage calendars',
-            ),
-
-            onTap: () {
-              showInfo(
-                context,
-                'Shared calendars will be connected '
-                'to the cloud in the next stage.',
-              );
-            },
-          ),
-
-          ListTile(
-            leading:
-                const Icon(
-              Icons.notifications,
-            ),
-
-            title:
-                const Text(
-              'Notifications',
-            ),
-
-            subtitle:
-                const Text(
-              'Event and task reminders',
-            ),
-
-            onTap: () {
-              showInfo(
-                context,
-                'Notifications will be added later.',
-              );
-            },
-          ),
-
-          const ListTile(
-            leading:
-                Icon(
-              Icons.info_outline,
-            ),
-
-            title:
-                Text(
-              'About',
-            ),
-
-            subtitle:
-                Text(
-              'Sharred Planner 1.0',
-            ),
           ),
         ],
-      ),
-    );
-  }
-
-  void showInfo(
-    BuildContext context,
-    String message,
-  ) {
-    ScaffoldMessenger
-        .of(context)
-        .showSnackBar(
-      SnackBar(
-        content:
-            Text(message),
       ),
     );
   }
