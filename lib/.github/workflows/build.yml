@@ -1,0 +1,82 @@
+name: Build Sharred Planner
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  android:
+    name: Build Sharred Planner Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+
+      - name: Create Android project
+        run: |
+          flutter create \
+            --platforms=android \
+            --org com.sharredplanner \
+            .
+
+      - name: Get Flutter packages
+        run: |
+          flutter pub get
+
+      - name: Build Android APK
+        run: |
+          flutter build apk --release
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sharred-planner-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+
+  ios:
+    name: Build Sharred Planner iPhone App
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+
+      - name: Create iOS project
+        run: |
+          flutter create \
+            --platforms=ios \
+            --org com.sharredplanner \
+            .
+
+      - name: Get Flutter packages
+        run: |
+          flutter pub get
+
+      - name: Build iOS
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Zip iOS build
+        run: |
+          cd build/ios/iphoneos
+          zip -r Sharred_Planner-.app.zip Runner.app
+
+      - name: Upload iOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: sharred-planner-ios
+          path: build/ios/iphoneos/Sharred_Planner-.app.zip
